@@ -1,0 +1,146 @@
+{
+  "Comment": "Natural Disaster Response Workflow",
+  "StartAt": "AssessEmergency",
+  "States": {
+    "AssessEmergency": {
+      "Type": "Task",
+      "Resource": "${EmergencyAssessmentFunctionArn}",
+      "Next": "NotifyEmergencyTeams",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "IntervalSeconds": 3,
+          "MaxAttempts": 2,
+          "BackoffRate": 1.5
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "HandleError"
+        }
+      ]
+    },
+    "NotifyEmergencyTeams": {
+      "Type": "Task",
+      "Resource": "${NotificationFunctionArn}",
+      "Next": "ParallelResponse",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 1.5
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "HandleError"
+        }
+      ]
+    },
+    "ParallelResponse": {
+      "Type": "Parallel",
+      "Branches": [
+        {
+          "StartAt": "CoordinateEvacuation",
+          "States": {
+            "CoordinateEvacuation": {
+              "Type": "Pass",
+              "Result": {
+                "action": "evacuation",
+                "status": "completed"
+              },
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "AllocateResources",
+          "States": {
+            "AllocateResources": {
+              "Type": "Task",
+              "Resource": "${ResourceAllocationFunctionArn}",
+              "End": true,
+              "Retry": [
+                {
+                  "ErrorEquals": ["States.ALL"],
+                  "IntervalSeconds": 3,
+                  "MaxAttempts": 2,
+                  "BackoffRate": 1.5
+                }
+              ],
+              "Catch": [
+                {
+                  "ErrorEquals": ["States.ALL"],
+                  "ResultPath": "$.resourceError",
+                  "Next": "ResourceAllocationFallback"
+                }
+              ]
+            },
+            "ResourceAllocationFallback": {
+              "Type": "Pass",
+              "Result": {
+                "status": "RESOURCE_ALLOCATION_FALLBACK",
+                "message": "Using default resource allocation due to error"
+              },
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "AssessDamage",
+          "States": {
+            "AssessDamage": {
+              "Type": "Pass",
+              "Result": {
+                "action": "damage_assessment",
+                "status": "completed"
+              },
+              "End": true
+            }
+          }
+        }
+      ],
+      "Next": "GenerateSituationReport"
+    },
+    "GenerateSituationReport": {
+      "Type": "Task",
+      "Resource": "${ReportGenerationFunctionArn}",
+      "Next": "UpdateEmergencyStatus",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "IntervalSeconds": 3,
+          "MaxAttempts": 2,
+          "BackoffRate": 1.5
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "HandleError"
+        }
+      ]
+    },
+    "UpdateEmergencyStatus": {
+      "Type": "Pass",
+      "Result": {
+        "status": "COMPLETED"
+      },
+      "End": true
+    },
+    "HandleError": {
+      "Type": "Pass",
+      "Result": {
+        "status": "ERROR",
+        "message": "Workflow encountered an error"
+      },
+      "End": true
+    }
+  }
+}
